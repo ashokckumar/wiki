@@ -1,18 +1,21 @@
-# Base image
-FROM node:18
+FROM node:20
 
 # Set working directory
 WORKDIR /wiki
 
-# Copy package files and install dependencies
+# Copy package.json and package-lock.json first
 COPY package*.json ./
-RUN npm install
 
-# Copy the rest of the project
+# Install dependencies with legacy-peer-deps
+RUN npm install --legacy-peer-deps --verbose
+RUN mkdir -p /wiki/assets
+
+# Copy the rest of the app
 COPY . .
 
-# Expose port (Wiki.js default)
+# Expose default port
 EXPOSE 3000
 
-# Start Wiki.js
+# Start the app
 CMD ["node", "server"]
+
