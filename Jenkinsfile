@@ -7,9 +7,9 @@ pipeline {
         DOCKER_NETWORK = "wiki-network"
         POSTGRES_CONTAINER = "wikidb"
         WIKI_CONTAINER = "wiki-app"
-        HOST_PORT = "3000"       // Change if port is in use
+        HOST_PORT = "3000"
         CONTAINER_PORT = "3000"
-        WORKDIR = "${WORKSPACE}/wiki-ci-cd"
+        WORKDIR = "${WORKSPACE}" // Use repo root
     }
 
     stages {
@@ -32,12 +32,12 @@ pipeline {
             steps {
                 echo "⚙️ Preparing config.yml and assets..."
                 sh """
-                    # Ensure Jenkins has write permission
-                    mkdir -p $WORKDIR
+                    # Ensure write permission
                     chmod -R 777 $WORKDIR
 
-                    # Create config.yml
-                    cat > $WORKDIR/config.yml <<EOL
+                    # Create config.yml if missing
+                    if [ ! -f $WORKDIR/config.yml ]; then
+                      cat > $WORKDIR/config.yml <<EOL
 db:
   type: postgres
   host: $POSTGRES_CONTAINER
@@ -55,6 +55,7 @@ auth:
     password: Admin123!
     email: admin@example.com
 EOL
+                    fi
 
                     # Ensure assets folder & favicon
                     mkdir -p $WORKDIR/assets
@@ -94,15 +95,13 @@ EOL
             steps {
                 echo "📌 Running Postgres and Wiki.js containers..."
 
-                // Create Docker network if missing
                 sh """
+                    # Create network if missing
                     if ! docker network inspect $DOCKER_NETWORK >/dev/null 2>&1; then
                         docker network create $DOCKER_NETWORK
                     fi
-                """
 
-                // Run Postgres container if not running
-                sh """
+                    # Run Postgres container
                     if ! docker ps -q -f name=$POSTGRES_CONTAINER | grep -q .; then
                         docker run -d --name $POSTGRES_CONTAINER \\
                             -e POSTGRES_DB=wiki \\
@@ -112,17 +111,13 @@ EOL
                             -p 5432:5432 \\
                             postgres:15
                     fi
-                """
 
-                // Remove old Wiki.js container if exists
-                sh """
+                    # Remove old Wiki.js container
                     if docker ps -a -q -f name=$WIKI_CONTAINER | grep -q .; then
                         docker rm -f $WIKI_CONTAINER
                     fi
-                """
 
-                // Run Wiki.js container
-                sh """
+                    # Run Wiki.js container
                     docker run -d --name $WIKI_CONTAINER --network $DOCKER_NETWORK -p $HOST_PORT:$CONTAINER_PORT \\
                         -v $WORKDIR/config.yml:/wiki/config.yml:ro \\
                         -v $WORKDIR/assets:/wiki/assets:ro \\
