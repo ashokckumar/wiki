@@ -6,6 +6,9 @@ pipeline {
         DOCKER_IMAGE = "ashokdocke/wiki:latest"
         DOCKER_NETWORK = "wiki-network"
         POSTGRES_CONTAINER = "wikidb"
+        WIKI_CONTAINER = "wiki-app"
+        HOST_PORT = "3000"  // Change if port is in use
+        CONTAINER_PORT = "3000"
     }
 
     stages {
@@ -72,9 +75,16 @@ pipeline {
                     fi
                 """
 
+                // Remove old wiki container if exists
+                sh """
+                    if docker ps -a -q -f name=$WIKI_CONTAINER | grep -q .; then
+                        docker rm -f $WIKI_CONTAINER
+                    fi
+                """
+
                 // Run Wiki.js container
                 sh """
-                    docker run -d --name wiki-app --network $DOCKER_NETWORK -p 3000:3000 \\
+                    docker run -d --name $WIKI_CONTAINER --network $DOCKER_NETWORK -p $HOST_PORT:$CONTAINER_PORT \\
                         -v \$(pwd)/config.yml:/wiki/config.yml \\
                         $DOCKER_IMAGE
                 """
