@@ -7,7 +7,7 @@ pipeline {
         DOCKER_NETWORK = "wiki-network"
         POSTGRES_CONTAINER = "wikidb"
         WIKI_CONTAINER = "wiki-app"
-        HOST_PORT = "3000"  // Change if port is in use
+        HOST_PORT = "3000"      // Change if port is in use
         CONTAINER_PORT = "3000"
     }
 
@@ -82,19 +82,28 @@ pipeline {
                     fi
                 """
 
-                // Ensure assets folder and favicon exist
+                // Ensure config.yml exists
+                sh """
+                    if [ ! -f config.yml ]; then
+                        cp config.sample.yml config.yml
+                        echo "✅ config.yml created from sample"
+                    fi
+                """
+
+                // Ensure assets folder and favicon.ico exist
                 sh """
                     mkdir -p assets
                     if [ ! -f assets/favicon.ico ]; then
                         touch assets/favicon.ico
+                        echo "✅ favicon.ico created in assets"
                     fi
                 """
 
                 // Run Wiki.js container with config and assets mounted
                 sh """
                     docker run -d --name $WIKI_CONTAINER --network $DOCKER_NETWORK -p $HOST_PORT:$CONTAINER_PORT \\
-                        -v \$(pwd)/config.yml:/wiki/config.yml \\
-                        -v \$(pwd)/assets:/wiki/assets \\
+                        -v \$(pwd)/config.yml:/wiki/config.yml:ro \\
+                        -v \$(pwd)/assets:/wiki/assets:ro \\
                         $DOCKER_IMAGE
                 """
             }
