@@ -82,10 +82,19 @@ pipeline {
                     fi
                 """
 
-                // Run Wiki.js container
+                // Ensure assets folder and favicon exist
+                sh """
+                    mkdir -p assets
+                    if [ ! -f assets/favicon.ico ]; then
+                        touch assets/favicon.ico
+                    fi
+                """
+
+                // Run Wiki.js container with config and assets mounted
                 sh """
                     docker run -d --name $WIKI_CONTAINER --network $DOCKER_NETWORK -p $HOST_PORT:$CONTAINER_PORT \\
                         -v \$(pwd)/config.yml:/wiki/config.yml \\
+                        -v \$(pwd)/assets:/wiki/assets \\
                         $DOCKER_IMAGE
                 """
             }
