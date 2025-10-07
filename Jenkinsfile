@@ -7,8 +7,9 @@ pipeline {
         DOCKER_NETWORK = "wiki-network"
         POSTGRES_CONTAINER = "wikidb"
         WIKI_CONTAINER = "wiki-app"
-        HOST_PORT = "3000"          // Change if port is in use
+        HOST_PORT = "3000"       // Change if port is in use
         CONTAINER_PORT = "3000"
+        WORKDIR = "${WORKSPACE}/wiki-ci-cd"
     }
 
     stages {
@@ -27,11 +28,16 @@ pipeline {
             }
         }
 
-        stage('Prepare config.yml') {
+        stage('Prepare config.yml & assets') {
             steps {
-                echo "⚙️ Preparing config.yml for headless setup..."
+                echo "⚙️ Preparing config.yml and assets..."
                 sh """
-                    cat > config.yml <<EOL
+                    # Ensure Jenkins has write permission
+                    mkdir -p $WORKDIR
+                    chmod -R 777 $WORKDIR
+
+                    # Create config.yml
+                    cat > $WORKDIR/config.yml <<EOL
 db:
   type: postgres
   host: $POSTGRES_CONTAINER
@@ -49,22 +55,28 @@ auth:
     password: Admin123!
     email: admin@example.com
 EOL
+
+                    # Ensure assets folder & favicon
+                    mkdir -p $WORKDIR/assets
+                    if [ ! -f $WORKDIR/assets/favicon.ico ]; then
+                        touch $WORKDIR/assets/favicon.ico
+                    fi
                 """
-                echo "✅ config.yml created with database and admin user"
+                echo "✅ config.yml and assets prepared"
             }
         }
 
         stage('Run Tests') {
             steps {
-                echo "🧪 Running tests (skipped for Wiki.js demo)..."
-                sh 'echo "Skipping tests for Wiki.js project"'
+                echo "🧪 Skipping tests for Wiki.js project"
+                sh 'echo "Tests skipped"'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 echo "🐳 Building Docker image..."
-                sh "docker build -t $DOCKER_IMAGE ."
+                sh "docker build -t $DOCKER_IMAGE $WORKDIR"
             }
         }
 
@@ -82,7 +94,7 @@ EOL
             steps {
                 echo "📌 Running Postgres and Wiki.js containers..."
 
-                // Create Docker network if not exists
+                // Create Docker network if missing
                 sh """
                     if ! docker network inspect $DOCKER_NETWORK >/dev/null 2>&1; then
                         docker network create $DOCKER_NETWORK
@@ -102,26 +114,18 @@ EOL
                     fi
                 """
 
-                // Remove old wiki container if exists
+                // Remove old Wiki.js container if exists
                 sh """
                     if docker ps -a -q -f name=$WIKI_CONTAINER | grep -q .; then
                         docker rm -f $WIKI_CONTAINER
                     fi
                 """
 
-                // Ensure assets folder and favicon exist
-                sh """
-                    mkdir -p assets
-                    if [ ! -f assets/favicon.ico ]; then
-                        touch assets/favicon.ico
-                    fi
-                """
-
-                // Run Wiki.js container with headless config and assets mounted
+                // Run Wiki.js container
                 sh """
                     docker run -d --name $WIKI_CONTAINER --network $DOCKER_NETWORK -p $HOST_PORT:$CONTAINER_PORT \\
-                        -v \$(pwd)/config.yml:/wiki/config.yml:ro \\
-                        -v \$(pwd)/assets:/wiki/assets:ro \\
+                        -v $WORKDIR/config.yml:/wiki/config.yml:ro \\
+                        -v $WORKDIR/assets:/wiki/assets:ro \\
                         $DOCKER_IMAGE
                 """
             }
@@ -136,7 +140,7 @@ EOL
             echo "✅ Pipeline succeeded! Docker image pushed and containers running."
         }
         failure {
-            echo "❌ Pipeline failed! Check the logs for errors."
+            echo "❌ Pipeline failed! Check logs for errors."
         }
     }
 }
