@@ -2,11 +2,10 @@ pipeline {
     agent any
 
     environment {
-        // DockerHub credentials stored in Jenkins (ID = dockerhub-cred)
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred')
-
-        // Your Docker image name (change if needed)
         DOCKER_IMAGE = "ashokdocke/wiki:latest"
+        DOCKER_NETWORK = "wiki-network"
+        POSTGRES_CONTAINER = "wikidb"
     }
 
     stages {
@@ -21,7 +20,6 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 echo "📦 Installing Node.js dependencies..."
-                // Use --legacy-peer-deps to bypass dependency version conflicts
                 sh 'npm install --legacy-peer-deps'
             }
         }
@@ -49,6 +47,39 @@ pipeline {
                 """
             }
         }
+
+        stage('Run Containers') {
+            steps {
+                echo "📌 Running Postgres and Wiki.js containers..."
+
+                // Create Docker network if not exists
+                sh """
+                    if ! docker network inspect $DOCKER_NETWORK >/dev/null 2>&1; then
+                        docker network create $DOCKER_NETWORK
+                    fi
+                """
+
+                // Run Postgres container if not running
+                sh """
+                    if ! docker ps -q -f name=$POSTGRES_CONTAINER | grep -q .; then
+                        docker run -d --name $POSTGRES_CONTAINER \\
+                            -e POSTGRES_DB=wiki \\
+                            -e POSTGRES_USER=wikijs \\
+                            -e POSTGRES_PASSWORD=wikijsrocks \\
+                            --network $DOCKER_NETWORK \\
+                            -p 5432:5432 \\
+                            postgres:15
+                    fi
+                """
+
+                // Run Wiki.js container
+                sh """
+                    docker run -d --name wiki-app --network $DOCKER_NETWORK -p 3000:3000 \\
+                        -v \$(pwd)/config.yml:/wiki/config.yml \\
+                        $DOCKER_IMAGE
+                """
+            }
+        }
     }
 
     post {
@@ -56,10 +87,10 @@ pipeline {
             echo "🏁 Pipeline finished."
         }
         success {
-            echo "✅ Pipeline succeeded! Docker image pushed to Docker Hub."
+            echo "✅ Pipeline succeeded! Docker image pushed and containers running."
         }
         failure {
-            echo "❌ Pipeline failed! Check the Jenkins logs for errors."
+            echo "❌ Pipeline failed! Check the logs for errors."
         }
     }
 }
