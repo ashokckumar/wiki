@@ -32,9 +32,6 @@ pipeline {
             steps {
                 echo "⚙️ Preparing config.yml and assets..."
                 sh """
-                    # Ensure write permission
-                    chmod -R 777 $WORKDIR
-
                     # Create config.yml if missing
                     if [ ! -f $WORKDIR/config.yml ]; then
                       cat > $WORKDIR/config.yml <<EOL
@@ -94,7 +91,6 @@ EOL
         stage('Run Containers') {
             steps {
                 echo "📌 Running Postgres and Wiki.js containers..."
-
                 sh """
                     # Create network if missing
                     if ! docker network inspect $DOCKER_NETWORK >/dev/null 2>&1; then
